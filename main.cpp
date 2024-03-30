@@ -1,5 +1,7 @@
 #include <iostream>
 #include <Eigen/Dense>
+#include <armadillo>
+#include <cmath>
 
 using namespace std;
 using Eigen::MatrixXd;
@@ -7,6 +9,16 @@ using Eigen::VectorXd;
 using Eigen::seq;
 using Eigen::last;
 using Eigen::all;
+
+template <typename M>
+M load_csv_arma (const std::string & path) {
+	/*
+		LOads data from csv file located at specified path
+	*/
+    	arma::mat X;
+    	X.load(path, arma::csv_ascii);
+    	return Eigen::Map<const M>(X.memptr(), X.n_rows, X.n_cols);
+}
 
 VectorXd getHouseholder(VectorXd x){
 	/*
@@ -95,7 +107,47 @@ VectorXd solveLinearSystem(MatrixXd A, VectorXd b){
 	return backSubstitution(R, c);
 }
 
+float sigmoid(float x){ return 1 / (1 + exp(-x)); }
+
 int main(){
+	int nHiddenNodes;
+	int nFeatures;
+	int const N_LABELS = 1; // assuming single label problem
+	int m,n;
+
+	// read the dataset
+	MatrixXd A = load_csv_arma<MatrixXd>("/home/bendico765/Scrivania/Gianluca/Università/CM/dataset.csv");
+
+	m = A.rows(); // total numer of samples
+	n = A.cols();
+
+	nFeatures = n - N_LABELS;
+	nHiddenNodes = m;
+
+	MatrixXd x = A.leftCols(nFeatures); // x features
+	VectorXd y = A.rightCols(N_LABELS); // y labels
+
+	cout << "Matrix x" << endl << x << endl;
+
+	// generating the random weights and biases
+	MatrixXd w = MatrixXd::Random(nHiddenNodes, nFeatures);
+	VectorXd bias = VectorXd::Random(nHiddenNodes);
+
+	// computing the input layer weights matrix
+	MatrixXd H(m, nHiddenNodes);
+	for(int i = 0; i < m; i++){ // iterate over samples
+		for(int j = 0; j < nHiddenNodes; j++){ // iterate over hidden nodes
+			H(i, j) = sigmoid( w(j, seq(0, last))*x(i, seq(0, last)).transpose() + bias(j) );
+		}
+	}
+
+	cout << "Matrix H" << endl << H << endl;
+	cout << "Vector y" << endl << y << endl;
+
+	VectorXd beta = solveLinearSystem(H, y);
+	cout << "Vector beta" << endl << beta << endl;
+	cout << "Predicted values" << endl << H * beta << endl;
+	/*
 	MatrixXd A(3,3);
 	A(0,0) = 1;
 	A(0,1) = 2;
@@ -119,4 +171,5 @@ int main(){
 
 	VectorXd x = solveLinearSystem(A, b);
 	cout << "Solution x" << endl << x << endl;
+	*/
 }
