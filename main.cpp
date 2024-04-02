@@ -2,6 +2,9 @@
 #include <Eigen/Dense>
 #include <armadillo>
 #include <cmath>
+#include <sstream>
+#include <chrono>
+#include "extremeLearning.h"
 
 using namespace std;
 using Eigen::MatrixXd;
@@ -9,167 +12,95 @@ using Eigen::VectorXd;
 using Eigen::seq;
 using Eigen::last;
 using Eigen::all;
+using chrono::high_resolution_clock;
+using chrono::duration;
 
+/*
+	Loads data from csv file
+
+	@param the path of the csv file to load
+*/
 template <typename M>
 M load_csv_arma (const std::string & path) {
-	/*
-		LOads data from csv file located at specified path
-	*/
     	arma::mat X;
     	X.load(path, arma::csv_ascii);
     	return Eigen::Map<const M>(X.memptr(), X.n_rows, X.n_cols);
 }
 
-VectorXd getHouseholder(VectorXd x){
-	/*
-		Returns householder vector for vector x
-	*/
-	VectorXd y, v;
-
-	// compute target vector
-	y = VectorXd::Constant(x.size(), 0);
-	y(0) = x.norm();
-
-	// compute householder
-	v = x - y;
-	return  v / v.norm();
+/**/
+const static Eigen::IOFormat CSVFormat(Eigen::StreamPrecision, Eigen::DontAlignCols, ", ", "\n");
+void save_csv(string name, MatrixXd matrix)
+{
+    ofstream file(name.c_str());
+    file << matrix.format(CSVFormat);
 }
 
-tuple<MatrixXd, MatrixXd> qr(MatrixXd A){
-	/*
-		Compute QR factorization of matrix A and returns a tuple containing
-		matrices Q and R
-	*/
-	int m = A.rows();
-	int n = A.cols();
+void complexityBenchmark(){
+	MatrixXd A;
+	int m_values[] = {100, 200, 400, 800};
+	int n_values[] = {5, 10, 15, 20, 25, 30, 35, 40, 45, 50};
 
-	// initialize matrices R and Q
-	MatrixXd R = A;
-	MatrixXd Q = MatrixXd::Identity(m, m);
+	A = load_csv_arma<MatrixXd>("complexityBenchmark/MatrixA.csv");
 
-	int last_iteration;
-	if( m > n ) last_iteration = n;
-	else last_iteration = n-1;
+	for(int i = 0; i < size(m_values); i ++){
+		int m = m_values[i];
+		MatrixXd measurements(size(n_values), 2);
+		for(int j = 0; j < size(n_values); j++){
+			MatrixXd Q,R;
+			int n = n_values[j];
 
-	//  compute factorization iteratibely
-	for(int k = 0; k < last_iteration; k++){
-		// compute the householder reflector and householder matrix H for the k-th column of matrix A
-		VectorXd u = getHouseholder(R(seq(k, last), k));
-		MatrixXd H = MatrixXd::Identity(m-k, m-k) - 2*( u * u.transpose() );
+			MatrixXd submatrix(m, n);
+			for(int r = 0; r < m; r++){
+				for(int c = 0; c < n; c++){
+					submatrix(r, c) = A(r, c);
+				}
+			}
 
-		// compute submatrix R and Q*H
-		R.bottomRightCorner(m-k, n-k) = R.bottomRightCorner(m-k, n-k).eval() - 2*(u * u.transpose() * R.bottomRightCorner(m-k, n-k).eval());
-		Q.bottomRightCorner(m, n-k) =  Q.bottomRightCorner(m, n - k).eval() * H;
-	}
+			auto t1 = high_resolution_clock::now(); // begin measurement
+			tie(Q,R) = qr(submatrix);
+			auto t2 = high_resolution_clock::now(); // end measurement
 
-	return make_tuple(Q, R);
-}
-
-MatrixXd backSubstitution(MatrixXd A, VectorXd b){
-	/*
-		Compute the solution x of Ax = b using back substitution 
-		assuming A upper triangular.
-	*/
-	int m = A.rows();
-	int n = A.cols();
-
-	VectorXd x(m);
-
-	for(int i = m - 1; i >= 0; i--){
-		double acc = b(i);
-		for(int j = i + 1; j < n; j++){
-			acc -= A(i, j)*x(j);
+			measurements(j, 0) = n;
+			measurements(j, 1) = duration<double, milli>(t2 - t1).count();
 		}
-		x(i) = acc / A(i,i);
+		ostringstream filepath;
+		filepath << m << " rows.csv";
+		save_csv(filepath.str(), measurements);
 	}
-	return x;
 }
-
-VectorXd solveLinearSystem(MatrixXd A, VectorXd b){
-	/*
-		Given matrices A and b solves the linear system Ax = b and returns
-		the solution x. The solution is computed by using QR factorization
-		(via householder reflectors) and back substitution.
-	*/
-	MatrixXd Q, R, Q_0, R_0;
-	int m = A.rows();
-	int n = A.cols();
-
-	// factorize A using QR
-	tie(Q, R) = qr(A);
-
-	// keeping thinner matrices Q_0 and R_0
-	Q_0 = Q.bottomLeftCorner(m, n);
-	R_0 = R.topLeftCorner(n, n);
-
-	// solving R_0 x = Q_0^T b via back substitution
-	VectorXd c = Q_0.transpose() * b;
-	return backSubstitution(R, c);
-}
-
-float sigmoid(float x){ return 1 / (1 + exp(-x)); }
 
 int main(){
+	complexityBenchmark();
+
+	/*
 	int nHiddenNodes;
 	int nFeatures;
+	int nSamples;
 	int const N_LABELS = 1; // assuming single label problem
 	int m,n;
 
 	// read the dataset
-	MatrixXd A = load_csv_arma<MatrixXd>("/home/bendico765/Scrivania/Gianluca/Università/CM/dataset.csv");
+	MatrixXd A = load_csv_arma<MatrixXd>("dataset.csv");
 
 	m = A.rows(); // total numer of samples
 	n = A.cols();
 
+	nSamples = m;
 	nFeatures = n - N_LABELS;
-	nHiddenNodes = m;
+	nHiddenNodes = m -1;
 
 	MatrixXd x = A.leftCols(nFeatures); // x features
 	VectorXd y = A.rightCols(N_LABELS); // y labels
 
 	cout << "Matrix x" << endl << x << endl;
 
-	// generating the random weights and biases
-	MatrixXd w = MatrixXd::Random(nHiddenNodes, nFeatures);
-	VectorXd bias = VectorXd::Random(nHiddenNodes);
-
-	// computing the input layer weights matrix
-	MatrixXd H(m, nHiddenNodes);
-	for(int i = 0; i < m; i++){ // iterate over samples
-		for(int j = 0; j < nHiddenNodes; j++){ // iterate over hidden nodes
-			H(i, j) = sigmoid( w(j, seq(0, last))*x(i, seq(0, last)).transpose() + bias(j) );
-		}
-	}
+	MatrixXd H = initializeInputLayer(x, nSamples, nHiddenNodes, nFeatures);
 
 	cout << "Matrix H" << endl << H << endl;
-	cout << "Vector y" << endl << y << endl;
+	//cout << "Vector y" << endl << y << endl;
 
 	VectorXd beta = solveLinearSystem(H, y);
-	cout << "Vector beta" << endl << beta << endl;
-	cout << "Predicted values" << endl << H * beta << endl;
-	/*
-	MatrixXd A(3,3);
-	A(0,0) = 1;
-	A(0,1) = 2;
-	A(0,2) = 3;
-	A(1,0) = 0;
-	A(1,1) = 1;
-	A(1,2) = 4;
-	A(2,0) = 5;
-	A(2,1) = 6;
-	A(2,2) = 0;
-
-	VectorXd b(3);
-	b(0) = 9;
-	b(1) = 6;
-	b(2) = 22;
-
-	MatrixXd Q, R;
-	tie(Q, R) = qr(A);
-
-	cout << "Q*R" << endl << Q*R << endl;
-
-	VectorXd x = solveLinearSystem(A, b);
-	cout << "Solution x" << endl << x << endl;
+	//cout << "Vector beta" << endl << beta << endl;
+	//cout << "Predicted values" << endl << H * beta << endl;
 	*/
 }
