@@ -47,7 +47,7 @@ tuple<MatrixXd, MatrixXd> qr(MatrixXd A){
 	MatrixXd Q = MatrixXd::Identity(m, m);
 
 	int last_iteration;
-	if( m > n ) last_iteration = n;
+	if( m != n ) last_iteration = n;
 	else last_iteration = n-1;
 
 	//  compute factorization iteratibely
@@ -57,7 +57,7 @@ tuple<MatrixXd, MatrixXd> qr(MatrixXd A){
 		MatrixXd H = MatrixXd::Identity(m-k, m-k) - 2*( u * u.transpose() );
 
 		// compute submatrix R and Q*H
-		R.bottomRightCorner(m-k, n-k) = R.bottomRightCorner(m-k, n-k).eval() - 2*(u * u.transpose() * R.bottomRightCorner(m-k, n-k).eval());
+		R.bottomRightCorner(m-k, n-k) = R.bottomRightCorner(m-k, n-k).eval() - 2 * u * (u.transpose() * R.bottomRightCorner(m-k, n-k).eval());
 		Q.bottomRightCorner(m, m-k) =  Q.bottomRightCorner(m, m - k).eval() * H;
 	}
 
@@ -81,6 +81,7 @@ MatrixXd backSubstitution(MatrixXd A, VectorXd b){
 	// starting from the bottom row, iterate and solve
 	for(int i = m - 1; i >= 0; i--){
 		double acc = b(i);
+
 		for(int j = i + 1; j < n; j++){
 			acc -= A(i, j)*x(j);
 		}
@@ -89,7 +90,7 @@ MatrixXd backSubstitution(MatrixXd A, VectorXd b){
 	return x;
 }
 
-VectorXd solveLinearSystem(MatrixXd A, VectorXd b){
+VectorXd solveLinearSystem(MatrixXd A, VectorXd b, int nHiddenNodes){
 	/*
 		Given matrices A and b solves the linear system Ax = b and returns
 		the solution x. The solution is computed by using QR factorization
@@ -103,12 +104,13 @@ VectorXd solveLinearSystem(MatrixXd A, VectorXd b){
 	tie(Q, R) = qr(A);
 
 	// keeping thinner matrices Q_0 and R_0
-	Q_0 = Q.bottomLeftCorner(m, n);
-	R_0 = R.topLeftCorner(n, n);
+	Q_0 = Q.bottomLeftCorner(m, nHiddenNodes);
+	R_0 = R.topLeftCorner(nHiddenNodes, nHiddenNodes);
 
 	// solving R_0 x = Q_0^T b via back substitution
 	VectorXd c = Q_0.transpose() * b;
-	return backSubstitution(R, c);
+	cout << "Vector c" << endl << c << endl;
+	return backSubstitution(R_0, c);
 }
 
 float sigmoid(float x){ return 1 / (1 + exp(-x)); }

@@ -6,6 +6,10 @@
 #include <chrono>
 #include "extremeLearning.h"
 
+#ifndef LOG
+	#define LOG false
+#endif
+
 using namespace std;
 using Eigen::MatrixXd;
 using Eigen::VectorXd;
@@ -19,6 +23,7 @@ using chrono::duration;
 	Loads data from csv file
 
 	@param the path of the csv file to load
+	@return the matrix object containing the csv file data
 */
 template <typename M>
 M load_csv_arma (const std::string & path) {
@@ -35,42 +40,102 @@ void save_csv(string name, MatrixXd matrix)
     file << matrix.format(CSVFormat);
 }
 
-void complexityBenchmark(){
-	MatrixXd A;
-	int m_values[] = {100, 200, 400, 800};
-	int n_values[] = {5, 10, 15, 20, 25, 30, 35, 40, 45, 50};
+void complexityRowsBenchmark(){
+	MatrixXd A = load_csv_arma<MatrixXd>("complexityBenchmark/MatrixA.csv");
+	int m_values[] = {100}; // values for m
+	int n_values[] = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100}; // values for n
+	int n_measurements = 1;
 
-	A = load_csv_arma<MatrixXd>("complexityBenchmark/MatrixA.csv");
-
+	if( LOG ) cout << "Running complexity rows benchmark" << endl;
 	for(int i = 0; i < size(m_values); i ++){
 		int m = m_values[i];
+
+		// create a matrix containing the elapsed time for each simulation
 		MatrixXd measurements(size(n_values), 2);
 		for(int j = 0; j < size(n_values); j++){
-			MatrixXd Q,R;
 			int n = n_values[j];
-
 			MatrixXd submatrix(m, n);
+			MatrixXd Q,R;
+
+			//
 			for(int r = 0; r < m; r++){
 				for(int c = 0; c < n; c++){
 					submatrix(r, c) = A(r, c);
 				}
 			}
 
-			auto t1 = high_resolution_clock::now(); // begin measurement
-			tie(Q,R) = qr(submatrix);
-			auto t2 = high_resolution_clock::now(); // end measurement
+			// measure the execution time of QR factorization
+			if( LOG ) cout << "Running QR for matrix " << m << "x" << n << endl;
+			double mean_exec_time = 0;
 
+			for(int l = 0; l < n_measurements; l++){
+				if( LOG ) cout << "Taking measurement "<< l+1 <<"/"<<n_measurements << endl;
+				auto t1 = high_resolution_clock::now(); // begin measurement
+				tie(Q,R) = qr(submatrix);
+				auto t2 = high_resolution_clock::now(); // end measurement
+
+				mean_exec_time += duration<double, milli>(t2 - t1).count();
+			}
+			// save the results into the table
 			measurements(j, 0) = n;
-			measurements(j, 1) = duration<double, milli>(t2 - t1).count();
+			measurements(j, 1) = mean_exec_time / n_measurements;
 		}
+		// export the results onto a csv file
 		ostringstream filepath;
 		filepath << m << " rows.csv";
 		save_csv(filepath.str(), measurements);
 	}
 }
 
+void complexityColumnsBenchmark(){
+        MatrixXd A = load_csv_arma<MatrixXd>("complexityBenchmark/MatrixA.csv");
+        int m_values[] = {100, 200, 300, 400, 500, 600, 700, 800, 900, 1000}; // values for m
+        int n_values[] = {10}; // values for n
+        int n_measurements = 10;
+
+        if( LOG ) cout << "Running complexity columns benchmark" << endl;
+        for(int i = 0; i < size(n_values); i ++){
+                int n = n_values[i];
+
+                // create a matrix containing the elapsed time for each simulation
+                MatrixXd measurements(size(m_values), 2);
+                for(int j = 0; j < size(m_values); j++){
+                        int m = m_values[j];
+                        MatrixXd submatrix(m, n);
+                        MatrixXd Q,R;
+
+                        //
+                        for(int r = 0; r < m; r++){
+                                for(int c = 0; c < n; c++){
+                                        submatrix(r, c) = A(r, c);
+                                }
+                        }
+
+                        // measure the execution time of QR factorization
+                        if( LOG ) cout << "Running QR for matrix " << m << "x" << n << endl;
+                        double mean_exec_time = 0;
+                        for(int l = 0; l < n_measurements; l++){
+                                if( LOG ) cout << "Taking measurement "<< l+1 <<"/"<<n_measurements << endl;
+                                auto t1 = high_resolution_clock::now(); // begin measurement
+                                tie(Q,R) = qr(submatrix);
+                                auto t2 = high_resolution_clock::now(); // end measurement
+
+                                mean_exec_time += duration<double, milli>(t2 - t1).count();
+                        }
+                        // save the results into the table
+                        measurements(j, 0) = m;
+                        measurements(j, 1) = mean_exec_time / n_measurements;
+                }
+                // export the results onto a csv file
+                ostringstream filepath;
+                filepath << n << " columns.csv";
+                save_csv(filepath.str(), measurements);
+        }
+}
+
 int main(){
-	complexityBenchmark();
+	//complexityRowsBenchmark();
+	//complexityColumnsBenchmark();
 
 	/*
 	int nHiddenNodes;
@@ -87,7 +152,7 @@ int main(){
 
 	nSamples = m;
 	nFeatures = n - N_LABELS;
-	nHiddenNodes = m -1;
+	nHiddenNodes = m;
 
 	MatrixXd x = A.leftCols(nFeatures); // x features
 	VectorXd y = A.rightCols(N_LABELS); // y labels
@@ -97,10 +162,10 @@ int main(){
 	MatrixXd H = initializeInputLayer(x, nSamples, nHiddenNodes, nFeatures);
 
 	cout << "Matrix H" << endl << H << endl;
-	//cout << "Vector y" << endl << y << endl;
+	cout << "Vector y" << endl << y << endl;
 
-	VectorXd beta = solveLinearSystem(H, y);
-	//cout << "Vector beta" << endl << beta << endl;
-	//cout << "Predicted values" << endl << H * beta << endl;
+	VectorXd beta = solveLinearSystem(H, y, nHiddenNodes);
+	cout << "Vector beta" << endl << beta << endl;
+	cout << "Predicted values" << endl << H * beta << endl;
 	*/
 }
