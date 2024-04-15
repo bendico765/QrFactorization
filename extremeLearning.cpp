@@ -109,11 +109,11 @@ VectorXd solveLinearSystem(MatrixXd A, VectorXd b, int nHiddenNodes){
 
 	// solving R_0 x = Q_0^T b via back substitution
 	VectorXd c = Q_0.transpose() * b;
-	cout << "Vector c" << endl << c << endl;
+
 	return backSubstitution(R_0, c);
 }
 
-float sigmoid(float x){ return 1 / (1 + exp(-x)); }
+double sigmoid(float x){ return 1 / (1 + exp(-x)); }
 
 /*
 	Initialize the hidden layer output matrix
