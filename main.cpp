@@ -10,6 +10,10 @@
 	#define LOG false
 #endif
 
+#ifndef TUX_COMPARISON
+	#define TUX_COMPARISON false
+#endif
+
 using namespace std;
 using Eigen::MatrixXd;
 using Eigen::VectorXd;
@@ -134,42 +138,29 @@ void complexityColumnsBenchmark(){
         }
 }
 
-void firstResidualTest(MatrixXd A){
-	//MatrixXd A = load_csv_arma<MatrixXd>("complexityBenchmark/MatrixA.csv");
-	//int m_values = {100, 1000, 10000};
-	//int n_values = {10, 100, 100};
-	//int m_values[] = {10000};
-	//int n_values[] = {100};
+void qrResidualTest(MatrixXd A){
+	MatrixXd Q, R;
+	tie(Q, R) = qr(A);
 
-	//for(int i = 0; i < size(m_values); i++){
-		MatrixXd Q, R;
-		//int m = m_values[i];
-		//int n = n_values[i];
-		/*
-		MatrixXd submatrix(m, n);
-
-		for(int r = 0; r < m; r++){
-			for(int c = 0; c < n; c++){
-				submatrix(r, c) = A(r, c);
-			}
-		}
-		*/
-		//tie(Q, R) = qr(submatrix);
-		tie(Q, R) = qr(A);
-
-		//float residual = (Q*R - submatrix).norm() / submatrix.norm();
-		float residual = (Q*R - A).norm() / A.norm();
-		cout << "|| QR - A || / ||A|| : " << residual << endl;
-	//}
+	float residual = (Q*R - A).norm() / A.norm();
+	cout << "|| QR - A || / ||A|| : " << residual << endl;
 }
 
-void secondResidualTest(MatrixXd submatrix, VectorXd subvector){
+void linearSystemResidualTest(MatrixXd submatrix, VectorXd subvector){
 	int m = submatrix.rows();
 	int n = submatrix.cols();
 	VectorXd x_tilde = solveLinearSystem(submatrix, subvector, n);
 
 	double r_tilde_norm = (submatrix * x_tilde - subvector).norm();
         cout << "Residual r_tilde = A x_tilde - b for matrix : " << r_tilde_norm << endl;
+
+	/******* Eigentux QR method for comparison *********/
+	if( TUX_COMPARISON ){
+		MatrixXd eigen_x_tilde = submatrix.householderQr().solve(subvector);
+		double eigen_r_tilde_norm = (submatrix * eigen_x_tilde - subvector).norm();
+		cout << "(Eigentux) Residual r_tilde = A x_tilde - b for matrix : " << eigen_r_tilde_norm << endl;
+	}
+	/**************************************************/
 
 	CompleteOrthogonalDecomposition<MatrixXd> cqr(submatrix);
 	MatrixXd pinv = cqr.pseudoInverse();
@@ -180,14 +171,12 @@ void secondResidualTest(MatrixXd submatrix, VectorXd subvector){
 	cout << "Bound K(A) * ( ||r_tilde|| / ||b|| ) : "  << bound << endl;
 }
 
-int main(){
-	//complexityRowsBenchmark();
-	//complexityColumnsBenchmark();
+void residualTests(){
 	MatrixXd A = load_csv_arma<MatrixXd>("complexityBenchmark/MatrixA.csv");
 	VectorXd b = load_csv_arma<VectorXd>("complexityBenchmark/VectorB.csv");
-	int N_RESIDUAL_TESTS = 4;
-	int m_values[] = { 100, 100, 1000, 1000 };
-	int n_values[] = { 10, 100, 100, 1000 };
+	int N_RESIDUAL_TESTS = 3;
+	int m_values[] = { 100, 100, 1000 };
+	int n_values[] = { 10, 100, 100};
 
 	for(int i = 0; i < N_RESIDUAL_TESTS; i++){
 		int m = m_values[i];
@@ -202,10 +191,17 @@ int main(){
                 	}
         	}
 		cout << "RUNNING RESIDUALS TESTS FOR MATRIX " << m << "x" << n << endl;
-		firstResidualTest(submatrix);
-		secondResidualTest(submatrix, subvector);
+		qrResidualTest(submatrix);
+		linearSystemResidualTest(submatrix, subvector);
 		cout << "=====================================================" << endl;
 	}
+}
+
+
+int main(){
+	//complexityRowsBenchmark();
+	//complexityColumnsBenchmark();
+	residualTests();
 	/*
 	int nHiddenNodes;
 	int nFeatures;
