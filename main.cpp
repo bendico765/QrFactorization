@@ -146,28 +146,28 @@ void qrResidualTest(MatrixXd A){
 	cout << "|| QR - A || / ||A|| : " << residual << endl;
 }
 
-void linearSystemResidualTest(MatrixXd submatrix, VectorXd subvector){
-	int m = submatrix.rows();
-	int n = submatrix.cols();
-	VectorXd x_tilde = solveLinearSystem(submatrix, subvector, n);
+void linearSystemResidualTest(MatrixXd matrix, VectorXd vector){
+	int m = matrix.rows();
+	int n = matrix.cols();
+	VectorXd x_tilde = solveLinearSystem(matrix, vector, n);
 
-	double r_tilde_norm = (submatrix * x_tilde - subvector).norm();
+	double r_tilde_norm = (matrix * x_tilde - vector).norm();
         cout << "Residual r_tilde = A x_tilde - b for matrix : " << r_tilde_norm << endl;
 
 	/******* Eigentux QR method for comparison *********/
 	if( TUX_COMPARISON ){
-		MatrixXd eigen_x_tilde = submatrix.householderQr().solve(subvector);
-		double eigen_r_tilde_norm = (submatrix * eigen_x_tilde - subvector).norm();
+		MatrixXd eigen_x_tilde = matrix.householderQr().solve(vector);
+		double eigen_r_tilde_norm = (matrix * eigen_x_tilde - vector).norm();
 		cout << "(Eigentux) Residual r_tilde = A x_tilde - b for matrix : " << eigen_r_tilde_norm << endl;
 	}
 	/**************************************************/
 
-	CompleteOrthogonalDecomposition<MatrixXd> cqr(submatrix);
+	CompleteOrthogonalDecomposition<MatrixXd> cqr(matrix);
 	MatrixXd pinv = cqr.pseudoInverse();
-	double condition_number_matrix = submatrix.norm() * pinv.norm();
+	double condition_number_matrix = matrix.norm() * pinv.norm();
 	cout << "Condition number of matrix: " << condition_number_matrix << endl;
 
-	double bound =  condition_number_matrix * r_tilde_norm / subvector.norm();
+	double bound =  condition_number_matrix * r_tilde_norm / vector.norm();
 	cout << "Bound K(A) * ( ||r_tilde|| / ||b|| ) : "  << bound << endl;
 }
 
@@ -199,10 +199,12 @@ void residualTests(){
 
 
 int main(){
-	//complexityRowsBenchmark();
-	//complexityColumnsBenchmark();
-	residualTests();
 	/*
+	complexityRowsBenchmark();
+	complexityColumnsBenchmark();
+	residualTests();
+	*/
+	
 	int nHiddenNodes;
 	int nFeatures;
 	int nSamples;
@@ -217,7 +219,7 @@ int main(){
 
 	nSamples = m;
 	nFeatures = n - N_LABELS;
-	nHiddenNodes = m;
+	nHiddenNodes = m - 2;
 
 	MatrixXd x = A.leftCols(nFeatures); // x features
 	VectorXd y = A.rightCols(N_LABELS); // y labels
@@ -232,5 +234,5 @@ int main(){
 	VectorXd beta = solveLinearSystem(H, y, nHiddenNodes);
 	cout << "Vector beta" << endl << beta << endl;
 	cout << "Predicted values" << endl << H * beta << endl;
-	*/
+
 }
