@@ -174,9 +174,9 @@ void linearSystemResidualTest(MatrixXd matrix, VectorXd vector){
 void residualTests(){
 	MatrixXd A = load_csv_arma<MatrixXd>("complexityBenchmark/MatrixA.csv");
 	VectorXd b = load_csv_arma<VectorXd>("complexityBenchmark/VectorB.csv");
-	int N_RESIDUAL_TESTS = 3;
-	int m_values[] = { 100, 100, 1000 };
-	int n_values[] = { 10, 100, 100};
+	int N_RESIDUAL_TESTS = 4;
+	int m_values[] = { 100, 100, 1000, 10000};
+	int n_values[] = { 10, 100, 100, 100};
 
 	for(int i = 0; i < N_RESIDUAL_TESTS; i++){
 		int m = m_values[i];
@@ -197,14 +197,71 @@ void residualTests(){
 	}
 }
 
+void distanceFromOptimalityTests(){
+	MatrixXd A = load_csv_arma<MatrixXd>("complexityBenchmark/MatrixA.csv");
+	VectorXd b = load_csv_arma<VectorXd>("complexityBenchmark/VectorB.csv");
+	int N_TESTS = 3;
+	int m_values[] = { 100, 100, 1000};
+	int n_values[] = { 10, 100, 100};
+	//int m_values[] = { 100, 100, 1000, 10000};
+	//int n_values[] = { 10, 100, 100, 100};
+
+	for(int i = 0; i < N_TESTS; i++){
+		int m = m_values[i];
+		int n = n_values[i];
+
+		MatrixXd submatrix(m, n);
+		VectorXd subvector(m);
+		for(int r = 0; r < m; r++){
+			subvector(r) = b(r);
+                	for(int c = 0; c < n; c++){
+                        	submatrix(r, c) = A(r, c);
+                	}
+        	}
+		cout << "RUNNING DISTANCE FROM OPTIMALITY TESTS FOR MATRIX " << m << "x" << n << endl;
+		
+		int nSamples = m;
+		int nFeatures = n;
+		int nHiddenNodes = m;	
+		
+		// computing our x
+		MatrixXd H = initializeInputLayer(submatrix, nSamples, nHiddenNodes, nFeatures);
+		VectorXd beta = solveLinearSystem(H, subvector, nHiddenNodes);
+		
+		// Calculate Q for (H^TH)x = H^tb ==> Qx = v
+		MatrixXd Q = H.transpose() * H;
+		
+		// Calculate v vector for Qx = v
+    	VectorXd v = H.transpose() * subvector;
+    	
+    	// Calculate optimal solution
+    	CompleteOrthogonalDecomposition<MatrixXd> cqr(Q);
+		MatrixXd Q_inv = cqr.pseudoInverse();
+	
+    	VectorXd X_star = Q_inv * v;
+    	
+    	double diff_norm = (X_star - beta).norm();
+    	cout << "| X_star - X |_2 : "  << diff_norm << endl;
+    	
+    	double squared_err = 0;
+    	for(int i = 0; i < X_star.rows(); i++){
+    		squared_err += (X_star[i] - beta[i]) * (X_star[i] - beta[i]);
+    	}
+    	squared_err = squared_err / X_star.rows();
+    	cout << "Mean squared error: "  << squared_err << endl;
+		
+		cout << "=====================================================" << endl;
+	}
+}
+
 
 int main(){
+	distanceFromOptimalityTests();
+	//complexityRowsBenchmark();
+	//complexityColumnsBenchmark();
+	//residualTests();
+
 	/*
-	complexityRowsBenchmark();
-	complexityColumnsBenchmark();
-	residualTests();
-	*/
-	
 	int nHiddenNodes;
 	int nFeatures;
 	int nSamples;
@@ -219,10 +276,10 @@ int main(){
 
 	nSamples = m;
 	nFeatures = n - N_LABELS;
-	nHiddenNodes = m - 2;
+	nHiddenNodes = m;
 
 	MatrixXd x = A.leftCols(nFeatures); // x features
-	VectorXd y = A.rightCols(N_LABELS); // y labels
+	MatrixXd y = A.rightCols(N_LABELS); // y labels
 
 	cout << "Matrix x" << endl << x << endl;
 
@@ -232,7 +289,7 @@ int main(){
 	cout << "Vector y" << endl << y << endl;
 
 	VectorXd beta = solveLinearSystem(H, y, nHiddenNodes);
-	cout << "Vector beta" << endl << beta << endl;
+	//cout << "Vector beta" << endl << beta << endl;
 	cout << "Predicted values" << endl << H * beta << endl;
-
+	*/
 }
